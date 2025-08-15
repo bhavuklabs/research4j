@@ -24,7 +24,6 @@ public class CitationService implements AutoCloseable {
     private final CitationConfig config;
     private final String cseId;
 
-    // Rate limiting and retry configuration
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_DELAY_MS = 1000;
     private static final long RATE_LIMIT_MS = 500;
@@ -60,26 +59,21 @@ public class CitationService implements AutoCloseable {
     public List<CitationResult> search(String query) throws CitationException {
         validateQuery(query);
 
-        // Apply rate limiting
         applyRateLimit();
 
         logger.info("Searching for: " + truncateQuery(query));
 
-        // Try primary fetcher first
         List<CitationResult> results = searchWithFetcher(primaryFetcher, query, "primary");
 
-        // If primary fails or returns insufficient results, try fallback
         if ((results.isEmpty() || results.size() < 3) && fallbackFetcher != null) {
             logger.info("Primary fetcher returned " + results.size() +
                 " results, trying fallback fetcher");
 
             List<CitationResult> fallbackResults = searchWithFetcher(fallbackFetcher, query, "fallback");
 
-            // Merge results, prioritizing primary
             results = mergeResults(results, fallbackResults);
         }
 
-        // Validate and enhance results
         List<CitationResult> validatedResults = validateAndEnhanceResults(results, query);
 
         logger.info("Search completed: " + validatedResults.size() + " valid citations returned");
@@ -112,7 +106,6 @@ public class CitationService implements AutoCloseable {
                 lastException = e;
                 logger.warning(fetcherType + " fetcher failed on attempt " + (retryCount + 1) + ": " + e.getMessage());
 
-                // Don't retry on certain types of errors
                 if (e.getMessage().contains("API key") || e.getMessage().contains("authentication")) {
                     logger.severe("Authentication error with " + fetcherType + " fetcher, not retrying");
                     break;
@@ -126,7 +119,6 @@ public class CitationService implements AutoCloseable {
 
             retryCount++;
 
-            // Exponential backoff for retries
             if (retryCount < MAX_RETRIES) {
                 try {
                     long delay = RETRY_DELAY_MS * (long) Math.pow(2, retryCount - 1);
@@ -152,13 +144,12 @@ public class CitationService implements AutoCloseable {
         List<CitationResult> fallbackResults) {
         List<CitationResult> merged = new ArrayList<>(primaryResults);
 
-        // Add fallback results that aren't duplicates
         for (CitationResult fallbackResult : fallbackResults) {
             boolean isDuplicate = primaryResults.stream()
                 .anyMatch(primary -> areDuplicates(primary, fallbackResult));
 
             if (!isDuplicate) {
-                // Mark as fallback source and add
+
                 merged.add(fallbackResult);
             }
         }
@@ -175,14 +166,12 @@ public class CitationService implements AutoCloseable {
             return false;
         }
 
-        // Check URL similarity
         String url1 = result1.getUrl();
         String url2 = result2.getUrl();
         if (url1 != null && url2 != null && url1.equals(url2)) {
             return true;
         }
 
-        // Check title similarity
         String title1 = result1.getTitle();
         String title2 = result2.getTitle();
         if (title1 != null && title2 != null) {
@@ -237,23 +226,19 @@ public class CitationService implements AutoCloseable {
             return false;
         }
 
-        // Check for minimum content requirements
         if (result.getContent() == null || result.getContent().trim().length() < 50) {
             return false;
         }
 
-        // Check for valid URL
         String url = result.getUrl();
         if (url == null || url.trim().isEmpty()) {
             return false;
         }
 
-        // Filter out obviously invalid URLs
         if (url.contains("javascript:") || url.startsWith("mailto:") || url.startsWith("tel:")) {
             return false;
         }
 
-        // Check for spam indicators
         String title = result.getTitle() != null ? result.getTitle().toLowerCase() : "";
         String content = result.getContent().toLowerCase();
 
@@ -269,12 +254,9 @@ public class CitationService implements AutoCloseable {
 
 
     private CitationResult enhanceResult(CitationResult result, String query) {
-        // Calculate enhanced relevance score
         double enhancedScore = calculateEnhancedRelevance(result, query);
         result.setRelevanceScore(enhancedScore);
 
-
-        // Enhance domain classification
         String domain = result.getDomain();
         if (domain != null) {
             result.setDomain(classifyDomain(domain));
@@ -292,11 +274,10 @@ public class CitationService implements AutoCloseable {
         String titleLower = result.getTitle() != null ? result.getTitle().toLowerCase() : "";
         String contentLower = result.getContent() != null ? result.getContent().toLowerCase() : "";
 
-        // Title relevance boost
         if (titleLower.contains(queryLower)) {
             enhancement += 0.2;
         } else {
-            // Partial match boost
+
             String[] queryWords = queryLower.split("\\s+");
             long titleMatches = java.util.Arrays.stream(queryWords)
                 .mapToLong(word -> titleLower.contains(word) ? 1 : 0)
@@ -304,20 +285,17 @@ public class CitationService implements AutoCloseable {
             enhancement += (titleMatches / (double) queryWords.length) * 0.1;
         }
 
-        // Content relevance boost
         String[] queryWords = queryLower.split("\\s+");
         long contentMatches = java.util.Arrays.stream(queryWords)
             .mapToLong(word -> contentLower.contains(word) ? 1 : 0)
             .sum();
         enhancement += (contentMatches / (double) queryWords.length) * 0.1;
 
-        // Domain authority boost
         String domain = result.getDomain();
         if (domain != null) {
             enhancement += getDomainAuthorityBoost(domain);
         }
 
-        // Content quality boost
         int contentLength = result.getContent() != null ? result.getContent().length() : 0;
         if (contentLength > 1000) {
             enhancement += 0.05;
@@ -325,7 +303,6 @@ public class CitationService implements AutoCloseable {
             enhancement += 0.02;
         }
 
-        // Recency boost (if available)
         if (result.getRetrievedAt() != null) {
             java.time.Duration timeSinceRetrieval = java.time.Duration.between(
                 result.getRetrievedAt(), java.time.LocalDateTime.now());
@@ -341,25 +318,21 @@ public class CitationService implements AutoCloseable {
     private double getDomainAuthorityBoost(String domain) {
         String domainLower = domain.toLowerCase();
 
-        // High authority domains
         if (domainLower.contains("wikipedia") || domainLower.contains(".edu") ||
             domainLower.contains(".gov") || domainLower.contains(".org")) {
             return 0.15;
         }
 
-        // Technical authority domains
         if (domainLower.contains("github") || domainLower.contains("stackoverflow") ||
             domainLower.contains("medium") || domainLower.contains("arxiv")) {
             return 0.1;
         }
 
-        // News and research domains
         if (domainLower.contains("reuters") || domainLower.contains("bbc") ||
             domainLower.contains("nature") || domainLower.contains("science")) {
             return 0.08;
         }
 
-        // HTTPS boost
         if (domainLower.startsWith("https://")) {
             return 0.02;
         }
@@ -406,17 +379,16 @@ public class CitationService implements AutoCloseable {
 
     private CitationFetcher createFallbackFetcher(CitationConfig config, String cseId) {
         try {
-            // If primary is Tavily and we have Google credentials, use Google as fallback
+
             if (config.getCitationSource() == TAVILY && cseId != null && !cseId.trim().isEmpty()) {
-                // We'd need a way to get Google API key for fallback - this is a limitation
-                // For now, we'll return null and rely on primary only
+
+                logger.info("Fallback to Google Search not implemented (missing API key configuration)");
                 return null;
             }
 
-            // If primary is Google and we have Tavily credentials, use Tavily as fallback
             if (config.getCitationSource() == GOOGLE_GEMINI) {
-                // We'd need a way to get Tavily API key for fallback - this is a limitation
-                // For now, we'll return null and rely on primary only
+
+                logger.info("Fallback to Tavily not implemented (missing API key configuration)");
                 return null;
             }
 
@@ -468,7 +440,7 @@ public class CitationService implements AutoCloseable {
 
     public boolean isHealthy() {
         try {
-            // Test with a simple query
+
             List<CitationResult> testResults = search("test");
             return true; // If no exception thrown, service is healthy
         } catch (Exception e) {

@@ -29,7 +29,9 @@ import com.github.bhavuklabs.citation.service.CitationService;
 import com.github.bhavuklabs.core.contracts.LLMClient;
 import com.github.bhavuklabs.core.payloads.LLMResponse;
 import com.github.bhavuklabs.deepresearch.context.DeepResearchContext;
+import com.github.bhavuklabs.deepresearch.context.MemoryManager;
 import com.github.bhavuklabs.deepresearch.models.DeepResearchConfig;
+import com.github.bhavuklabs.deepresearch.models.DeepResearchProgress;
 import com.github.bhavuklabs.deepresearch.models.DeepResearchResult;
 import com.github.bhavuklabs.deepresearch.models.ResearchQuestion;
 import com.github.bhavuklabs.deepresearch.models.ResearchResults;
@@ -1274,6 +1276,44 @@ public class DeepResearchEngine {
         }, 15, 15, TimeUnit.MINUTES);
     }
 
+    public boolean isHealthy() {
+        return !mainExecutor.isShutdown() && !scheduledExecutor.isShutdown() && researchSupervisor != null;
+    }
+
+    public DeepResearchProgress getSessionProgress(String sessionId) {
+        DeepResearchSession session = activeSessions.get(sessionId);
+        if (session == null) {
+            return null;
+        }
+        
+        return session.getProgress();
+    }
+
+    public Map<String, DeepResearchProgress> getAllActiveProgress() {
+        Map<String, DeepResearchProgress> progressMap = new HashMap<>();
+        for (Map.Entry<String, DeepResearchSession> entry : activeSessions.entrySet()) {
+            DeepResearchProgress progress = entry.getValue().getProgress();
+            if (progress != null) {
+                progressMap.put(entry.getKey(), progress);
+            }
+        }
+        return progressMap;
+    }
+
+    public boolean cancelSession(String sessionId) {
+        DeepResearchSession session = activeSessions.remove(sessionId);
+        if (session != null) {
+            session.getProgress().cancel();
+            logger.info("Cancelled deep research session: " + sessionId);
+            return true;
+        }
+        return false;
+    }
+
+    public MemoryManager getMemoryManager() {
+        return new MemoryManager();
+    }
+
     public void shutdown() {
         try {
             logger.info("Shutting down Enhanced DeepResearchEngine...");
@@ -1866,10 +1906,12 @@ public class DeepResearchEngine {
 
         private final DeepResearchContext context;
         private final Instant startTime;
+        private final DeepResearchProgress progress;
 
         public DeepResearchSession(DeepResearchContext context, Instant startTime) {
             this.context = context;
             this.startTime = startTime;
+            this.progress = new DeepResearchProgress(context.getSessionId());
         }
 
         public DeepResearchContext getContext() {
@@ -1878,6 +1920,10 @@ public class DeepResearchEngine {
 
         public Instant getStartTime() {
             return startTime;
+        }
+
+        public DeepResearchProgress getProgress() {
+            return progress;
         }
     }
 

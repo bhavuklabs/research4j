@@ -313,7 +313,17 @@ public class DynamicRouter {
         } catch (Exception e) {
             logger.warning("Error retrieving query analysis: " + e.getMessage());
         }
-        return null;
+        
+        // Return a default QueryAnalysis instead of null
+        return new QueryAnalysis() {
+            @Override
+            public String getAnalysisType() { return "default"; }
+            
+            @Override
+            public Map<String, Object> getAnalysisData() { 
+                return Map.of("type", "fallback", "complexity", "medium"); 
+            }
+        };
     }
 
     public void incrementRetryCount(ResearchAgentState state, String nodeName) {

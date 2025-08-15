@@ -597,11 +597,30 @@ public class CitationFetchNode implements GraphNode<ResearchAgentState> {
         try {
             Object analysis = state.getMetadata()
                 .get("query_analysis");
-            return analysis instanceof QueryAnalysis ? (QueryAnalysis) analysis : null;
+            return analysis instanceof QueryAnalysis ? (QueryAnalysis) analysis : createDefaultQueryAnalysis();
         } catch (Exception e) {
             logger.warning("Error retrieving query analysis: " + e.getMessage());
-            return null;
+            return createDefaultQueryAnalysis();
         }
+    }
+
+    private QueryAnalysis createDefaultQueryAnalysis() {
+        return new QueryAnalysis() {
+            public final boolean requiresCitations = true;
+            public final String complexityLevel = "medium";
+            
+            @Override
+            public String getAnalysisType() { return "default"; }
+            
+            @Override
+            public Map<String, Object> getAnalysisData() { 
+                return Map.of(
+                    "requiresCitations", requiresCitations,
+                    "complexityLevel", complexityLevel,
+                    "type", "fallback"
+                ); 
+            }
+        };
     }
 
     private String truncateString(String str, int maxLength) {

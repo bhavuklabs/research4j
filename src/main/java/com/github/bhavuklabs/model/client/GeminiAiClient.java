@@ -274,7 +274,7 @@ public class GeminiAiClient implements LLMClient, AutoCloseable {
     }
 
     private String extractJsonFromTextSafely(String text) {
-        if (text == null) return null;
+        if (text == null) return "{}";
 
         try {
             
@@ -295,10 +295,10 @@ public class GeminiAiClient implements LLMClient, AutoCloseable {
                 }
             }
 
-            return null;
+            return "{}";
         } catch (Exception e) {
             logger.warning("Error extracting JSON: " + e.getMessage());
-            return null;
+            return "{}";
         }
     }
 

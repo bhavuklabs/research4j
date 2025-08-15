@@ -327,7 +327,7 @@ public class GeminiCitationFetcher implements CitationFetcher, AutoCloseable {
             }
         }
 
-        return null;
+        return "No content available";
     }
 
     private String processContent(String rawContent) {

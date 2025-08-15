@@ -325,7 +325,7 @@ public class TavilyCitationFetcher implements CitationFetcher, AutoCloseable {
             }
         }
 
-        return null;
+        return "No content available";
     }
 
     private String processTextContent(String textContent) {
@@ -588,7 +588,7 @@ public class TavilyCitationFetcher implements CitationFetcher, AutoCloseable {
                 .build();
         } catch (Exception e) {
             logger.severe("Failed to create fallback citation: " + e.getMessage());
-            return null;
+            return CitationResult.builder().content("Failed to process citation").build();
         }
     }
 

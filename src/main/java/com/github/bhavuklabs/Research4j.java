@@ -100,9 +100,13 @@ public class Research4j implements AutoCloseable {
             logger.info("Research completed successfully in " + result.getProcessingTime());
             return new ResearchResult(result, config);
 
-        } catch (Exception e) {
-            logger.severe("Research failed for query: " + truncateQuery(query) + " - " + e.getMessage());
-            throw new RuntimeException("Research processing failed: " + e.getMessage(), e);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            logger.severe("Research interrupted for query: " + truncateQuery(query) + " - " + ie.getMessage());
+            throw new IllegalStateException("Research processing was interrupted", ie);
+        } catch (java.util.concurrent.ExecutionException ee) {
+            logger.severe("Research failed for query: " + truncateQuery(query) + " - " + ee.getCause());
+            throw new IllegalStateException("Research processing failed: " + ee.getCause(), ee.getCause());
         }
     }
 
@@ -188,16 +192,14 @@ public class Research4j implements AutoCloseable {
     public DeepResearchProgress getDeepResearchProgress(String sessionId) {
         validateResearchSessionId(sessionId);
         if (deepResearchEngine != null) {
-
-            return null;
+            return deepResearchEngine.getSessionProgress(sessionId);
         }
-        return null;
+        throw new IllegalStateException("Deep research is not enabled");
     }
 
     public Map<String, DeepResearchProgress> getAllActiveDeepResearch() {
         if (deepResearchEngine != null) {
-
-            return Map.of();
+            return deepResearchEngine.getAllActiveProgress();
         }
         return Map.of();
     }
@@ -205,21 +207,17 @@ public class Research4j implements AutoCloseable {
     public boolean cancelDeepResearch(String sessionId) {
         validateResearchSessionId(sessionId);
         if (deepResearchEngine != null) {
-
-            return false;
+            return deepResearchEngine.cancelSession(sessionId);
         }
         return false;
     }
 
     public Object getMemoryManager() {
         if (deepResearchEngine != null) {
-
-            return null;
+            return deepResearchEngine.getMemoryManager();
         }
-        return null;
-    }
-
-    public ResearchQualityReport validateResearchQuality(DeepResearchResult result) {
+        throw new IllegalStateException("Deep research is not enabled");
+    }    public ResearchQualityReport validateResearchQuality(DeepResearchResult result) {
         ResearchQualityValidator validator = new ResearchQualityValidator();
         return validator.validateComprehensiveQuality(result);
     }
@@ -281,13 +279,8 @@ public class Research4j implements AutoCloseable {
                 llmClient instanceof OpenAiClient ? ((OpenAiClient) llmClient).isHealthy() : true;
 
             boolean graphExecutorHealthy = graphExecutor.isHealthy();
-
-            if (deepResearchEngine != null) {
-
-            }
-
-            return llmHealthy && graphExecutorHealthy;
-
+            boolean deepResearchHealthy = deepResearchEngine != null && deepResearchEngine.isHealthy();
+            return llmHealthy && graphExecutorHealthy && deepResearchHealthy;
         } catch (Exception e) {
             logger.warning("Health check failed: " + e.getMessage());
             return false;
@@ -797,7 +790,6 @@ public class Research4j implements AutoCloseable {
     }
 
     public void enableLangGraph4jRuntime() {
-
-        logger.info("Runtime engine switching not yet implemented");
+        logger.info("Switching to LangGraph4j engine at runtime (not yet implemented)");
     }
 }
